@@ -19,6 +19,52 @@
         <li>Сохранено как: <code>{{ saved_path }}</code></li>
         <li>Ссылка (dev): <a href="{{ file_url }}">{{ file_url }}</a></li>
       </ul>
+
+      <h2>Предпросмотр</h2>
+
+      {% if preview_error %}
+        <p style="color: #b00020;"><strong>Ошибка предпросмотра:</strong> {{ preview_error }}</p>
+      {% elif preview_columns %}
+        <p><strong>Определено:</strong></p>
+        <ul>
+          {% if preview_encoding %}<li>Кодировка: <code>{{ preview_encoding }}</code></li>{% endif %}
+          {% if preview_delimiter %}<li>Разделитель: <code>{{ preview_delimiter }}</code></li>{% endif %}
+        </ul>
+
+        <p>Колонки ({{ preview_columns|length }}):</p>
+        <ul>
+          {% for c in preview_columns %}
+            <li><code>{{ c }}</code></li>
+          {% endfor %}
+        </ul>
+
+        <p>Первые {{ preview_rows_limit }} строк:</p>
+        <table border="1" cellpadding="6" cellspacing="0">
+          <thead>
+            <tr>
+              {% for c in preview_columns %}
+                <th>{{ c }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in preview_rows %}
+              <tr>
+                {% for cell in row %}
+                  <td>{{ cell }}</td>
+                {% endfor %}
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="{{ preview_columns|length }}">Нет строк данных.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p>Нет данных для предпросмотра.</p>
+      {% endif %}
+
       <hr />
     {% endif %}
 
