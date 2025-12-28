@@ -184,6 +184,12 @@
         <hr />
         <h2>4) Метрики выбранных полей</h2>
 
+        <hr>
+        <h2>шаг 2. нормализация</h2>
+        <p>покажем только безопасные изменения (пробелы, тире, регистр). без угадывания.</p>
+        <p><a href="{% url 'normalize_preview' %}">показать нормализацию</a></p>
+
+
         {% if metrics_general_warning %}
           <p style="color: #8a5a00;"><strong>Предупреждение:</strong> {{ metrics_general_warning }}</p>
         {% endif %}
