@@ -8,6 +8,20 @@
   <body>
     <h1>Загрузка CSV</h1>
 
+    {% if error %}
+      <p style="color: #b00020;"><strong>Ошибка:</strong> {{ error }}</p>
+    {% endif %}
+
+    {% if success %}
+      <p style="color: #0a7a0a;"><strong>Готово.</strong></p>
+      <ul>
+        <li>Имя файла: <code>{{ original_name }}</code></li>
+        <li>Сохранено как: <code>{{ saved_path }}</code></li>
+        <li>Ссылка (dev): <a href="{{ file_url }}">{{ file_url }}</a></li>
+      </ul>
+      <hr />
+    {% endif %}
+
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
       <div>
