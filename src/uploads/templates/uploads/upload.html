@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Загрузка CSV</title>
+  </head>
+  <body>
+    <h1>Загрузка CSV</h1>
+
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div>
+        <label for="csv_file">CSV-файл:</label>
+        <input id="csv_file" name="csv_file" type="file" accept=".csv,text/csv" required />
+      </div>
+
+      <div style="margin-top: 12px;">
+        <button type="submit">Загрузить</button>
+      </div>
+    </form>
+  </body>
+</html>
