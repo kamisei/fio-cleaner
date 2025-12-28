@@ -2,16 +2,79 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <title>нормализация (предпросмотр)</title>
+  <title>нормализация фио (предпросмотр)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 16px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+    th, td { border: 1px solid #ddd; padding: 8px; vertical-align: top; }
+    th { background: #f6f6f6; text-align: left; }
+    code { background: #f2f2f2; padding: 1px 4px; border-radius: 4px; }
+    .muted { color: #666; }
+    .error { padding: 10px; background: #ffecec; border: 1px solid #f5b5b5; }
+  </style>
 </head>
 <body>
-  <h1>нормализация (предпросмотр)</h1>
+  <h1>нормализация фио (предпросмотр)</h1>
 
-  <p>файл: неизвестно</p>
-  <p>поля: неизвестно</p>
+  {% if error %}
+    <div class="error">
+      <strong>ошибка:</strong> {{ error }}
+    </div>
+    <p><a href="{% url 'upload_csv' %}">назад</a></p>
+  </body>
+</html>
+  {% endif %}
 
-  <p>таблица нормализации будет добавлена на следующем шаге.</p>
+  <p class="muted">
+    файл: <code>{{ active_path }}</code><br>
+    кодировка: <code>{{ preview_encoding }}</code>, разделитель: <code>{{ preview_delimiter }}</code><br>
+    строк предпросмотра: <code>{{ preview_rows_limit }}</code>
+  </p>
 
-  <p><a href="{% url 'upload_csv' %}">назад</a></p>
+  {% if selection %}
+    <p class="muted">выбор: <code>{{ selection }}</code></p>
+  {% endif %}
+
+  <p class="muted">
+    статистика: всего <code>{{ stats.total }}</code>,
+    ок <code>{{ stats.ok }}</code> (<code>{{ stats.ok_pct }}%</code>),
+    нормализовано <code>{{ stats.fixed }}</code> (<code>{{ stats.fixed_pct }}%</code>),
+    ❗️требует внимания <code>{{ stats.attention }}</code> (<code>{{ stats.attention_pct }}%</code>)
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>строка</th>
+        <th>поле</th>
+        <th>колонка csv</th>
+        <th>было</th>
+        <th>стало</th>
+        <th>статус</th>
+        <th>правила</th>
+        <th>требует внимания</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in items %}
+        <tr>
+          <td>{{ it.row_num }}</td>
+          <td>{{ it.field_label }}</td>
+          <td><code>{{ it.column_name }}</code></td>
+          <td>{{ it.before }}</td>
+          <td>{{ it.after }}</td>
+          <td><code>{{ it.status }}</code></td>
+          <td class="muted">{{ it.applied_rules }}</td>
+          <td>{% if it.attention %}<strong>{{ it.attention }}</strong>{% endif %}{% if it.attention_reasons %}<div class="muted">{{ it.attention_reasons }}</div>{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="8" class="muted">нет данных для предпросмотра</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <p style="margin-top: 16px;"><a href="{% url 'upload_csv' %}">назад</a></p>
 </body>
 </html>

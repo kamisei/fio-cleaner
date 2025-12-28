@@ -98,6 +98,22 @@ def _title_case_token_part(part: str) -> str:
     return part[:1].upper() + part[1:].lower()
 
 
+def _split_word_suspected_for_title_case(s: str) -> bool:
+    # Same heuristic as quality checks, but local to normalizer.
+    tokens = [tok for tok in s.strip().split() if tok]
+    for a, b in zip(tokens, tokens[1:]):
+        if not a or not b:
+            continue
+        b0 = b[0]
+        if b0.isalpha() and b0 == b0.lower():
+            if len(a) == 1 and a.isalpha() and a == a.upper():
+                return True
+            a_last = a[-1]
+            if a_last.isalpha() and a_last == a_last.lower():
+                return True
+    return False
+
+
 def _title_case_outside_parentheses(s: str) -> str:
     """
     Title-case only outside of круглых скобок.
@@ -208,7 +224,9 @@ def normalize_fio_value(value: Any) -> NormalizationResult:
         applied_rules.append(RULE_NORMALIZE_DASH)
         current = new
 
-    new = _title_case_outside_parentheses(current) if current != "" else ""
+    new = current
+    if current != "" and not _split_word_suspected_for_title_case(current):
+        new = _title_case_outside_parentheses(current)
     if new != current:
         applied_rules.append(RULE_TITLE_CASE)
         current = new

@@ -6,6 +6,11 @@ from django.core.files.storage import default_storage
 from django.shortcuts import render
 from django.utils import timezone
 
+
+# Domain (Step 2.2)
+from domain.fio.normalize_value import normalize_fio_value
+from domain.fio.quality_checks import detect_warnings
+from domain.fio.constants import ATTENTION_LABEL_RU, WARNING_LABELS_RU
 PREVIEW_ROWS = 20
 SNIFF_BYTES = 8192
 
@@ -315,6 +320,98 @@ def upload_csv(request):
 
 def normalize_preview(request):
     """
-    Step 2.1: normalization preview entrypoint (UI stub).
+    Step 2.3: normalization preview page (no persistence).
+    Shows how Step 2.2 safe normalization changes values for selected FIO columns.
     """
-    return render(request, "uploads/normalize_preview.html", {})
+    active_path = _load_active_file_from_session(request)
+    selection = _get_selection_from_session(request)
+
+    context = {
+        "active_path": active_path,
+        "selection": selection,
+        "preview_rows_limit": PREVIEW_ROWS,
+        "items": [],
+        "error": None,
+    }
+
+    if not active_path:
+        context["error"] = "Сначала загрузите CSV-файл."
+        return render(request, "uploads/normalize_preview.html", context)
+
+    if not selection or not isinstance(selection, dict) or selection.get("mode") not in ("single", "split"):
+        context["error"] = "Сначала выберите поле(я) ФИО на странице загрузки."
+        return render(request, "uploads/normalize_preview.html", context)
+
+    try:
+        columns, rows, encoding_used, delimiter_used = _read_csv_preview(active_path)
+        context["preview_encoding"] = encoding_used
+        context["preview_delimiter"] = delimiter_used
+    except ValueError as e:
+        context["error"] = str(e)
+        return render(request, "uploads/normalize_preview.html", context)
+    except Exception:
+        context["error"] = "Не удалось построить предпросмотр файла."
+        return render(request, "uploads/normalize_preview.html", context)
+
+    col_index = {name: i for i, name in enumerate(columns)}
+
+    # Build list of (label, column_name)
+    selected_fields = []
+    if selection["mode"] == "single":
+        col = selection.get("fio_column")
+        if col:
+            selected_fields.append(("фио", col))
+    else:
+        mapping = [
+            ("фамилия", selection.get("last_name_column")),
+            ("имя", selection.get("first_name_column")),
+            ("отчество", selection.get("middle_name_column")),
+        ]
+        for label, col in mapping:
+            if col:
+                selected_fields.append((label, col))
+
+    if not selected_fields:
+        context["error"] = "Выбор полей ФИО пустой. Вернитесь назад и выберите хотя бы одно поле."
+        return render(request, "uploads/normalize_preview.html", context)
+
+    # Prepare preview items
+    items = []
+    for row_i, r in enumerate(rows, start=1):
+        for field_label, col_name in selected_fields:
+            idx = col_index.get(col_name)
+            before_val = r[idx] if idx is not None and idx < len(r) else ""
+            result = normalize_fio_value(before_val)
+
+            items.append(
+                {
+                    "row_num": row_i,
+                    "field_label": field_label,
+                    "column_name": col_name,
+                    "before": before_val,
+                    "after": result.after,
+                    "status": result.status,
+                    "applied_rules": ", ".join(result.applied_rules) if result.applied_rules else "",
+                    "warnings": detect_warnings(before_val),
+                    "attention": ATTENTION_LABEL_RU if detect_warnings(before_val) else "",
+                    "attention_reasons": ", ".join(WARNING_LABELS_RU[w] for w in detect_warnings(before_val)) if detect_warnings(before_val) else "",
+                }
+            )
+
+    total = len(items)
+    ok_count = sum(1 for it in items if it.get("status") == "ok")
+    fixed_count = sum(1 for it in items if it.get("status") == "fixed")
+    attention_count = sum(1 for it in items if it.get("attention"))
+    context["stats"] = {
+        "total": total,
+        "ok": ok_count,
+        "fixed": fixed_count,
+        "attention": attention_count,
+        "ok_pct": round((ok_count / total * 100.0), 1) if total else 0.0,
+        "fixed_pct": round((fixed_count / total * 100.0), 1) if total else 0.0,
+        "attention_pct": round((attention_count / total * 100.0), 1) if total else 0.0,
+    }
+
+    context["items"] = items
+    return render(request, "uploads/normalize_preview.html", context)
+

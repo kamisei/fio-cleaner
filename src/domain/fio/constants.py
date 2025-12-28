@@ -29,3 +29,21 @@ RULES_REGISTRY_RU = {
     RULE_NORMALIZE_DASH: "нормализация тире",
     RULE_TITLE_CASE: "приведение регистра (Title Case)",
 }
+
+
+# Quality checks (warnings) - Step 2.3.x
+ATTENTION_LABEL_RU = "❗️требует внимания"
+
+WARN_HAS_DIGITS = "has_digits"
+WARN_HAS_LATIN = "has_latin"
+WARN_SPLIT_WORD_SUSPECTED = "split_word_suspected"
+WARN_TOO_SHORT = "too_short"
+WARN_SINGLE_LETTER_TOKEN = "single_letter_token"
+
+WARNING_LABELS_RU = {
+    WARN_HAS_DIGITS: "цифры",
+    WARN_HAS_LATIN: "латиница",
+    WARN_SPLIT_WORD_SUSPECTED: "разрыв внутри слова",
+    WARN_TOO_SHORT: "слишком коротко",
+    WARN_SINGLE_LETTER_TOKEN: "однобуквенный фрагмент",
+}
