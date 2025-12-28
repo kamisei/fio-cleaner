@@ -312,3 +312,9 @@ def upload_csv(request):
     # GET path: show preview for active file if any
     hydrate_preview_for_active_file()
     return render(request, "uploads/upload.html", context)
+
+def normalize_preview(request):
+    """
+    Step 2.1: normalization preview entrypoint (UI stub).
+    """
+    return render(request, "uploads/normalize_preview.html", {})
