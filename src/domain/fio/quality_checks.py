@@ -51,6 +51,11 @@ def detect_warnings(before: Any) -> list[str]:
     Warnings do NOT change the value and do NOT affect ok/fixed normalization status.
     """
     s = _to_str(before)
+
+    # Empty value is not a problem at this stage
+    if not s.strip():
+        return []
+
     tokens = _tokenize(s)
 
     warnings: list[str] = []

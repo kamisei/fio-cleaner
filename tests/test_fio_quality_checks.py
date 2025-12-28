@@ -14,6 +14,10 @@ from domain.fio.normalize_value import normalize_fio_value  # noqa: E402
 
 
 class TestFioQualityChecks(unittest.TestCase):
+
+    def test_empty_value_has_no_warnings(self):
+        w = detect_warnings(None)
+        self.assertEqual(w, [])
     def test_digits_attention(self):
         w = detect_warnings("Анна9")
         self.assertIn(WARN_HAS_DIGITS, w)
