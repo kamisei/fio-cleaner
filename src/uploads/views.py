@@ -9,10 +9,12 @@ from django.utils import timezone
 PREVIEW_ROWS = 20
 SNIFF_BYTES = 8192
 
-# Practical set for real-world Russian CSV:
-# - UTF-8 with/without BOM
-# - Windows-1251 (very common in exports)
+# Practical set for real-world Russian CSV
 ENCODINGS_TO_TRY = ["utf-8-sig", "cp1251"]
+
+# Session keys
+S_ACTIVE_FILE = "active_csv_path"
+S_SELECTION = "fio_selection"
 
 
 def _decode_sample(sample_bytes: bytes):
@@ -21,9 +23,7 @@ def _decode_sample(sample_bytes: bytes):
             return sample_bytes.decode(enc), enc
         except UnicodeDecodeError:
             continue
-    raise ValueError(
-        "Не удалось прочитать файл. Поддерживаются UTF-8 и Windows-1251 (cp1251)."
-    )
+    raise ValueError("Не удалось прочитать файл. Поддерживаются UTF-8 и Windows-1251 (cp1251).")
 
 
 def _read_csv_preview(storage_path: str):
@@ -55,7 +55,6 @@ def _read_csv_preview(storage_path: str):
         dialect = csv.get_dialect("excel")
         delimiter_used = ","
 
-    # Read the file for real using the selected encoding.
     with default_storage.open(storage_path, "rb") as raw:
         text = io.TextIOWrapper(raw, encoding=encoding_used, newline="")
         reader = csv.reader(text, dialect=dialect)
@@ -78,41 +77,238 @@ def _read_csv_preview(storage_path: str):
     return columns, rows, encoding_used, delimiter_used
 
 
+def _compute_column_stats(columns, rows, selected_column_names, examples_limit=5):
+    """
+    For each selected column name computes:
+      - filled_count
+      - fill_rate (%)
+      - examples (up to examples_limit non-empty values)
+    Returns (rows_checked, stats_dict, warnings_list).
+    """
+    col_index = {name: i for i, name in enumerate(columns)}
+    rows_checked = len(rows)
+    warnings = []
+    stats = {}
+
+    for name in selected_column_names:
+        if name not in col_index:
+            warnings.append(f"Столбец «{name}» не найден в заголовках.")
+            continue
+
+        idx = col_index[name]
+        filled = 0
+        examples = []
+
+        for r in rows:
+            val = r[idx] if idx < len(r) else ""
+            val = (val or "").strip()
+            if val:
+                filled += 1
+                if len(examples) < examples_limit and val not in examples:
+                    examples.append(val)
+
+        fill_rate = (filled / rows_checked * 100.0) if rows_checked > 0 else 0.0
+        stats[name] = {
+            "filled_count": filled,
+            "fill_rate": round(fill_rate, 1),
+            "examples": examples,
+        }
+
+    return rows_checked, stats, warnings
+
+
+def _load_active_file_from_session(request):
+    return request.session.get(S_ACTIVE_FILE)
+
+
+def _save_selection_to_session(request, selection: dict):
+    request.session[S_SELECTION] = selection
+    request.session.modified = True
+
+
+def _get_selection_from_session(request):
+    return request.session.get(S_SELECTION)
+
+
 def upload_csv(request):
-    context = {"preview_rows_limit": PREVIEW_ROWS}
+    context = {
+        "preview_rows_limit": PREVIEW_ROWS,
+        "selection_modes": [
+            ("single", "Одно поле (ФИО целиком)"),
+            ("split", "Отдельные поля (Ф/И/О)"),
+        ],
+    }
 
-    if request.method == "POST":
-        uploaded = request.FILES.get("csv_file")
+    # If we already have an active file in session, try to show its preview on GET
+    active_path = _load_active_file_from_session(request)
+    selection = _get_selection_from_session(request)
+    context["saved_selection"] = selection
 
-        if not uploaded:
-            context["error"] = "Файл не выбран."
-            return render(request, "uploads/upload.html", context)
-
-        name_lower = uploaded.name.lower()
-        if not name_lower.endswith(".csv"):
-            context["error"] = "Пожалуйста, загрузите файл в формате .csv."
-            return render(request, "uploads/upload.html", context)
-
-        base, ext = os.path.splitext(os.path.basename(uploaded.name))
-        timestamp = timezone.now().strftime("%Y%m%d_%H%M%S")
-        safe_name = f"{base}_{timestamp}{ext}"
-
-        saved_path = default_storage.save(f"uploads/{safe_name}", uploaded)
-
-        context["success"] = True
-        context["original_name"] = uploaded.name
-        context["saved_path"] = saved_path
-        context["file_url"] = default_storage.url(saved_path)
-
+    def hydrate_preview_for_active_file():
+        nonlocal active_path
+        if not active_path:
+            return
         try:
-            columns, rows, encoding_used, delimiter_used = _read_csv_preview(saved_path)
+            columns, rows, encoding_used, delimiter_used = _read_csv_preview(active_path)
+            context["has_active_file"] = True
             context["preview_columns"] = columns
             context["preview_rows"] = rows
             context["preview_encoding"] = encoding_used
             context["preview_delimiter"] = delimiter_used
+            context["rows_checked"] = len(rows)
         except ValueError as e:
+            context["has_active_file"] = True
             context["preview_error"] = str(e)
         except Exception:
+            context["has_active_file"] = True
             context["preview_error"] = "Не удалось построить предпросмотр файла."
 
+    if request.method == "POST":
+        action = request.POST.get("action", "upload")
+
+        # 1) Upload action: handle file upload, save, preview, reset selection
+        if action == "upload":
+            uploaded = request.FILES.get("csv_file")
+
+            if not uploaded:
+                context["error"] = "Файл не выбран."
+                hydrate_preview_for_active_file()
+                return render(request, "uploads/upload.html", context)
+
+            name_lower = uploaded.name.lower()
+            if not name_lower.endswith(".csv"):
+                context["error"] = "Пожалуйста, загрузите файл в формате .csv."
+                hydrate_preview_for_active_file()
+                return render(request, "uploads/upload.html", context)
+
+            base, ext = os.path.splitext(os.path.basename(uploaded.name))
+            timestamp = timezone.now().strftime("%Y%m%d_%H%M%S")
+            safe_name = f"{base}_{timestamp}{ext}"
+
+            saved_path = default_storage.save(f"uploads/{safe_name}", uploaded)
+
+            # Save active file in session and reset selection for new file
+            request.session[S_ACTIVE_FILE] = saved_path
+            request.session.pop(S_SELECTION, None)
+            request.session.modified = True
+
+            context["success"] = True
+            context["original_name"] = uploaded.name
+            context["saved_path"] = saved_path
+            context["file_url"] = default_storage.url(saved_path)
+            context["has_active_file"] = True
+
+            try:
+                columns, rows, encoding_used, delimiter_used = _read_csv_preview(saved_path)
+                context["preview_columns"] = columns
+                context["preview_rows"] = rows
+                context["preview_encoding"] = encoding_used
+                context["preview_delimiter"] = delimiter_used
+                context["rows_checked"] = len(rows)
+            except ValueError as e:
+                context["preview_error"] = str(e)
+            except Exception:
+                context["preview_error"] = "Не удалось построить предпросмотр файла."
+
+            return render(request, "uploads/upload.html", context)
+
+        # 2) Select action: save selection in session and compute metrics
+        if action == "select":
+            active_path = _load_active_file_from_session(request)
+            if not active_path:
+                context["selection_error"] = "Сначала загрузите CSV-файл."
+                return render(request, "uploads/upload.html", context)
+
+            # Read preview data to compute metrics
+            try:
+                columns, rows, encoding_used, delimiter_used = _read_csv_preview(active_path)
+                context["has_active_file"] = True
+                context["preview_columns"] = columns
+                context["preview_rows"] = rows
+                context["preview_encoding"] = encoding_used
+                context["preview_delimiter"] = delimiter_used
+                context["rows_checked"] = len(rows)
+            except ValueError as e:
+                context["has_active_file"] = True
+                context["preview_error"] = str(e)
+                context["selection_error"] = "Невозможно сохранить выбор, потому что предпросмотр не построен."
+                return render(request, "uploads/upload.html", context)
+            except Exception:
+                context["has_active_file"] = True
+                context["preview_error"] = "Не удалось построить предпросмотр файла."
+                context["selection_error"] = "Невозможно сохранить выбор, потому что предпросмотр не построен."
+                return render(request, "uploads/upload.html", context)
+
+            mode = request.POST.get("fio_mode", "").strip()
+            if mode not in ("single", "split"):
+                context["selection_error"] = "Выберите режим: одно поле или отдельные поля."
+                return render(request, "uploads/upload.html", context)
+
+            selection_payload = {"mode": mode}
+
+            selected_columns_for_metrics = []
+            human_labels = []
+
+            if mode == "single":
+                fio_col = request.POST.get("fio_column", "").strip()
+                if not fio_col:
+                    context["selection_error"] = "Выберите столбец с ФИО (одно поле)."
+                    return render(request, "uploads/upload.html", context)
+
+                selection_payload["fio_column"] = fio_col
+                selected_columns_for_metrics = [fio_col]
+                human_labels = [("ФИО", fio_col)]
+
+            else:  # split
+                last_col = request.POST.get("last_name_column", "").strip()
+                first_col = request.POST.get("first_name_column", "").strip()
+                middle_col = request.POST.get("middle_name_column", "").strip()
+
+                # Empty string means "not used"
+                selection_payload["last_name_column"] = last_col or None
+                selection_payload["first_name_column"] = first_col or None
+                selection_payload["middle_name_column"] = middle_col or None
+
+                chosen = [c for c in [last_col, first_col, middle_col] if c]
+                if not chosen:
+                    context["selection_error"] = "Выберите хотя бы одно поле: фамилия / имя / отчество."
+                    return render(request, "uploads/upload.html", context)
+
+                if last_col:
+                    human_labels.append(("Фамилия", last_col))
+                    selected_columns_for_metrics.append(last_col)
+                if first_col:
+                    human_labels.append(("Имя", first_col))
+                    selected_columns_for_metrics.append(first_col)
+                if middle_col:
+                    human_labels.append(("Отчество", middle_col))
+                    selected_columns_for_metrics.append(middle_col)
+
+            _save_selection_to_session(request, selection_payload)
+            context["saved_selection"] = selection_payload
+            context["selection_saved"] = True
+
+            rows_checked, stats, warnings = _compute_column_stats(
+                columns=columns,
+                rows=rows,
+                selected_column_names=selected_columns_for_metrics,
+                examples_limit=5,
+            )
+
+            context["selection_human"] = human_labels
+            context["metrics_rows_checked"] = rows_checked
+            context["metrics_stats"] = stats
+            context["metrics_warnings"] = warnings
+
+            # Non-blocking warnings (optional UX)
+            if rows_checked == 0:
+                context["metrics_general_warning"] = (
+                    "В файле нет строк данных для предпросмотра (возможно, только заголовок). "
+                    "Выбор сохранён, но метрики заполненности не информативны."
+                )
+
+            return render(request, "uploads/upload.html", context)
+
+    # GET path: show preview for active file if any
+    hydrate_preview_for_active_file()
     return render(request, "uploads/upload.html", context)

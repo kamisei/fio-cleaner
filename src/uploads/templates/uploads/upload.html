@@ -12,15 +12,34 @@
       <p style="color: #b00020;"><strong>Ошибка:</strong> {{ error }}</p>
     {% endif %}
 
+    <h2>1) Загрузка файла</h2>
+
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="upload" />
+      <div>
+        <label for="csv_file">CSV-файл:</label>
+        <input id="csv_file" name="csv_file" type="file" accept=".csv,text/csv" required />
+      </div>
+
+      <div style="margin-top: 12px;">
+        <button type="submit">Загрузить</button>
+      </div>
+    </form>
+
     {% if success %}
+      <hr />
       <p style="color: #0a7a0a;"><strong>Готово.</strong></p>
       <ul>
         <li>Имя файла: <code>{{ original_name }}</code></li>
         <li>Сохранено как: <code>{{ saved_path }}</code></li>
         <li>Ссылка (dev): <a href="{{ file_url }}">{{ file_url }}</a></li>
       </ul>
+    {% endif %}
 
-      <h2>Предпросмотр</h2>
+    {% if has_active_file %}
+      <hr />
+      <h2>2) Предпросмотр</h2>
 
       {% if preview_error %}
         <p style="color: #b00020;"><strong>Ошибка предпросмотра:</strong> {{ preview_error }}</p>
@@ -29,6 +48,7 @@
         <ul>
           {% if preview_encoding %}<li>Кодировка: <code>{{ preview_encoding }}</code></li>{% endif %}
           {% if preview_delimiter %}<li>Разделитель: <code>{{ preview_delimiter }}</code></li>{% endif %}
+          <li>Строк данных в предпросмотре: <code>{{ rows_checked }}</code></li>
         </ul>
 
         <p>Колонки ({{ preview_columns|length }}):</p>
@@ -64,20 +84,151 @@
       {% else %}
         <p>Нет данных для предпросмотра.</p>
       {% endif %}
-
-      <hr />
     {% endif %}
 
-    <form method="post" enctype="multipart/form-data">
-      {% csrf_token %}
-      <div>
-        <label for="csv_file">CSV-файл:</label>
-        <input id="csv_file" name="csv_file" type="file" accept=".csv,text/csv" required />
-      </div>
+    {% if has_active_file and preview_columns %}
+      <hr />
+      <h2>3) Выбор поля(ей) ФИО</h2>
 
-      <div style="margin-top: 12px;">
-        <button type="submit">Загрузить</button>
-      </div>
-    </form>
+      {% if selection_error %}
+        <p style="color: #b00020;"><strong>Ошибка:</strong> {{ selection_error }}</p>
+      {% endif %}
+
+      {% if selection_saved %}
+        <p style="color: #0a7a0a;"><strong>Выбор сохранён.</strong></p>
+      {% endif %}
+
+      {% if saved_selection %}
+        <p><strong>Текущий выбор:</strong></p>
+        <pre style="background:#f6f6f6; padding:10px;">{{ saved_selection }}</pre>
+      {% endif %}
+
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="select" />
+
+        <fieldset style="padding: 10px;">
+          <legend>Режим</legend>
+          {% for value, label in selection_modes %}
+            <label style="display:block; margin: 6px 0;">
+              <input
+                type="radio"
+                name="fio_mode"
+                value="{{ value }}"
+                {% if saved_selection and saved_selection.mode == value %}checked{% endif %}
+              />
+              {{ label }}
+            </label>
+          {% endfor %}
+        </fieldset>
+
+        <div style="margin-top: 12px; padding: 10px; border: 1px dashed #ccc;">
+          <h3>Одно поле (ФИО целиком)</h3>
+          <label>
+            Столбец:
+            <select name="fio_column">
+              <option value="">— выберите столбец —</option>
+              {% for c in preview_columns %}
+                <option value="{{ c }}" {% if saved_selection and saved_selection.fio_column == c %}selected{% endif %}>{{ c }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+
+        <div style="margin-top: 12px; padding: 10px; border: 1px dashed #ccc;">
+          <h3>Отдельные поля (можно выбрать 1–3 поля)</h3>
+
+          <div style="margin: 6px 0;">
+            <label>
+              Фамилия:
+              <select name="last_name_column">
+                <option value="">— не использовать —</option>
+                {% for c in preview_columns %}
+                  <option value="{{ c }}" {% if saved_selection and saved_selection.last_name_column == c %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+              </select>
+            </label>
+          </div>
+
+          <div style="margin: 6px 0;">
+            <label>
+              Имя:
+              <select name="first_name_column">
+                <option value="">— не использовать —</option>
+                {% for c in preview_columns %}
+                  <option value="{{ c }}" {% if saved_selection and saved_selection.first_name_column == c %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+              </select>
+            </label>
+          </div>
+
+          <div style="margin: 6px 0;">
+            <label>
+              Отчество:
+              <select name="middle_name_column">
+                <option value="">— не использовать —</option>
+                {% for c in preview_columns %}
+                  <option value="{{ c }}" {% if saved_selection and saved_selection.middle_name_column == c %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div style="margin-top: 12px;">
+          <button type="submit">Подтвердить выбор</button>
+        </div>
+      </form>
+
+      {% if metrics_stats %}
+        <hr />
+        <h2>4) Метрики выбранных полей</h2>
+
+        {% if metrics_general_warning %}
+          <p style="color: #8a5a00;"><strong>Предупреждение:</strong> {{ metrics_general_warning }}</p>
+        {% endif %}
+
+        {% if metrics_warnings %}
+          <ul>
+            {% for w in metrics_warnings %}
+              <li style="color: #8a5a00;">{{ w }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+
+        <p>Строк проверено (первые {{ preview_rows_limit }}): <code>{{ metrics_rows_checked }}</code></p>
+
+        <table border="1" cellpadding="6" cellspacing="0">
+          <thead>
+            <tr>
+              <th>Столбец</th>
+              <th>Заполнено</th>
+              <th>% заполнения</th>
+              <th>Примеры (до 5)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for col, st in metrics_stats.items %}
+              <tr>
+                <td><code>{{ col }}</code></td>
+                <td>{{ st.filled_count }} / {{ metrics_rows_checked }}</td>
+                <td>{{ st.fill_rate }}%</td>
+                <td>
+                  {% if st.examples %}
+                    <ul>
+                      {% for ex in st.examples %}
+                        <li>{{ ex }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    нет примеров в первых {{ preview_rows_limit }} строках
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    {% endif %}
   </body>
 </html>
