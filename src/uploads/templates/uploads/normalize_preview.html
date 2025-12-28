@@ -39,6 +39,7 @@
     статистика: всего <code>{{ stats.total }}</code>,
     ок <code>{{ stats.ok }}</code> (<code>{{ stats.ok_pct }}%</code>),
     нормализовано <code>{{ stats.fixed }}</code> (<code>{{ stats.fixed_pct }}%</code>),
+    needs_review <code>{{ stats.needs_review }}</code> (<code>{{ stats.needs_review_pct }}%</code>),
     ❗️требует внимания <code>{{ stats.attention }}</code> (<code>{{ stats.attention_pct }}%</code>)
   </p>
 
@@ -52,6 +53,7 @@
         <th>стало</th>
         <th>статус</th>
         <th>правила</th>
+        <th>комментарий</th>
         <th>требует внимания</th>
       </tr>
     </thead>
@@ -65,11 +67,12 @@
           <td>{{ it.after }}</td>
           <td><code>{{ it.status }}</code></td>
           <td class="muted">{{ it.applied_rules }}</td>
+          <td class="muted">{{ it.comment }}</td>
           <td>{% if it.attention %}<strong>{{ it.attention }}</strong>{% endif %}{% if it.attention_reasons %}<div class="muted">{{ it.attention_reasons }}</div>{% endif %}</td>
         </tr>
       {% empty %}
         <tr>
-          <td colspan="8" class="muted">нет данных для предпросмотра</td>
+          <td colspan="9" class="muted">нет данных для предпросмотра</td>
         </tr>
       {% endfor %}
     </tbody>

@@ -10,7 +10,8 @@ from django.utils import timezone
 # Domain (Step 2.2)
 from domain.fio.normalize_value import normalize_fio_value
 from domain.fio.quality_checks import detect_warnings
-from domain.fio.constants import ATTENTION_LABEL_RU, WARNING_LABELS_RU
+from domain.fio.quality_checks import detect_flags
+from domain.fio.constants import ATTENTION_LABEL_RU, WARNING_LABELS_RU, FLAG_LABELS_RU
 PREVIEW_ROWS = 20
 SNIFF_BYTES = 8192
 
@@ -390,26 +391,46 @@ def normalize_preview(request):
                     "column_name": col_name,
                     "before": before_val,
                     "after": result.after,
-                    "status": result.status,
+                    "status": None,  # computed below
                     "applied_rules": ", ".join(result.applied_rules) if result.applied_rules else "",
                     "warnings": detect_warnings(before_val),
                     "attention": ATTENTION_LABEL_RU if detect_warnings(before_val) else "",
                     "attention_reasons": ", ".join(WARNING_LABELS_RU[w] for w in detect_warnings(before_val)) if detect_warnings(before_val) else "",
+                    "flags": "",
+                    "comment": "",
                 }
             )
+            flags = detect_flags(before_val)
+
+            if flags:
+                status = "needs_review"
+                flags_str = ", ".join(flags)
+                comment = ", ".join(FLAG_LABELS_RU[f] for f in flags)
+            else:
+                status = result.status
+                flags_str = ""
+                comment = ""
+
+            items[-1]["status"] = status
+            items[-1]["flags"] = flags_str
+            items[-1]["comment"] = comment
+
 
     total = len(items)
     ok_count = sum(1 for it in items if it.get("status") == "ok")
     fixed_count = sum(1 for it in items if it.get("status") == "fixed")
     attention_count = sum(1 for it in items if it.get("attention"))
+    needs_review_count = sum(1 for it in items if it.get("status") == "needs_review")
     context["stats"] = {
         "total": total,
         "ok": ok_count,
         "fixed": fixed_count,
         "attention": attention_count,
+        "needs_review": needs_review_count,
         "ok_pct": round((ok_count / total * 100.0), 1) if total else 0.0,
         "fixed_pct": round((fixed_count / total * 100.0), 1) if total else 0.0,
         "attention_pct": round((attention_count / total * 100.0), 1) if total else 0.0,
+        "needs_review_pct": round((needs_review_count / total * 100.0), 1) if total else 0.0,
     }
 
     context["items"] = items

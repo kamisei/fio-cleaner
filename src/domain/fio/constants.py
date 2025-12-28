@@ -2,10 +2,12 @@
 
 TECH_STATUS_OK = "ok"
 TECH_STATUS_FIXED = "fixed"
+TECH_STATUS_NEEDS_REVIEW = "needs_review"
 
 TECH_STATUSES = {
     "ok": TECH_STATUS_OK,
     "fixed": TECH_STATUS_FIXED,
+    "needs_review": TECH_STATUS_NEEDS_REVIEW,
 }
 
 UI_STATUS_LABELS_RU = {
@@ -46,4 +48,22 @@ WARNING_LABELS_RU = {
     WARN_SPLIT_WORD_SUSPECTED: "разрыв внутри слова",
     WARN_TOO_SHORT: "слишком коротко",
     WARN_SINGLE_LETTER_TOKEN: "однобуквенный фрагмент",
+}
+
+
+# Quality flags (Step 3: problems that require review)
+FLAG_HAS_DIGITS = "has_digits"
+FLAG_HAS_FORBIDDEN_CHARS = "has_forbidden_chars"
+FLAG_MIXED_ALPHABET = "mixed_alphabet"
+FLAG_LATIN_ONLY = "latin_only"
+FLAG_TOO_MANY_WORDS = "too_many_words"
+FLAG_TOO_SHORT = "too_short"
+
+FLAG_LABELS_RU = {
+    FLAG_HAS_DIGITS: "цифры",
+    FLAG_HAS_FORBIDDEN_CHARS: "недопустимые символы",
+    FLAG_MIXED_ALPHABET: "смешанный алфавит",
+    FLAG_LATIN_ONLY: "латиница",
+    FLAG_TOO_MANY_WORDS: "слишком много слов",
+    FLAG_TOO_SHORT: "слишком коротко",
 }

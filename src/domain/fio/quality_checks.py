@@ -84,3 +84,60 @@ def detect_warnings(before: Any) -> list[str]:
         warnings.append(WARN_SINGLE_LETTER_TOKEN)
 
     return warnings
+
+
+def detect_flags(before: Any) -> list[str]:
+    """
+    Step 3 (MVP): detect problems that require user review.
+    Returns stable-ordered list of flag codes.
+    """
+    from .constants import (
+        FLAG_HAS_DIGITS,
+        FLAG_HAS_FORBIDDEN_CHARS,
+        FLAG_MIXED_ALPHABET,
+        FLAG_LATIN_ONLY,
+        FLAG_TOO_MANY_WORDS,
+        FLAG_TOO_SHORT,
+    )
+
+    s = _to_str(before)
+
+    # Empty value is NOT a problem
+    if not s.strip():
+        return []
+
+    flags: list[str] = []
+    tokens = _tokenize(s)
+
+    # 1) digits
+    if any(ch.isdigit() for ch in s):
+        flags.append(FLAG_HAS_DIGITS)
+
+    # 2) forbidden characters (anything except letters, spaces, hyphen)
+    for ch in s:
+        if ch.isalpha() or ch.isspace() or ch == "-":
+            continue
+        flags.append(FLAG_HAS_FORBIDDEN_CHARS)
+        break
+
+    # 3) alphabet checks
+    has_cyr = any(("А" <= ch <= "я") or (ch in "Ёё") for ch in s)
+    has_lat = _has_latin(s)
+
+    if has_cyr and has_lat:
+        flags.append(FLAG_MIXED_ALPHABET)
+    elif has_lat and not has_cyr:
+        flags.append(FLAG_LATIN_ONLY)
+
+    # 4) too many words
+    if len(tokens) > 3:
+        flags.append(FLAG_TOO_MANY_WORDS)
+
+    # 5) too short
+    if len(s.strip()) < 2:
+        flags.append(FLAG_TOO_SHORT)
+    elif len(tokens) == 1 and len(tokens[0]) == 1 and tokens[0].isalpha():
+        flags.append(FLAG_TOO_SHORT)
+
+    # Stable & de-duplicated
+    return sorted(set(flags))
